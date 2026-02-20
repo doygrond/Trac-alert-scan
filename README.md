@@ -1,81 +1,74 @@
-# Intercom
+# TracAlert — P2P Price Alert Agent
 
-This repository is a reference implementation of the **Intercom** stack on Trac Network for an **internet of agents**.
+> A fork of [Trac-Systems/intercom](https://github.com/Trac-Systems/intercom) that adds a decentralized crypto price alert agent powered by the Intercom P2P sidechain network.
 
-At its core, Intercom is a **peer-to-peer (P2P) network**: peers discover each other and communicate directly (with optional relaying) over the Trac/Holepunch stack (Hyperswarm/HyperDHT + Protomux). There is no central server required for sidechannel messaging.
-
-Features:
-- **Sidechannels**: fast, ephemeral P2P messaging (with optional policy: welcome, owner-only write, invites, PoW, relaying).
-- **SC-Bridge**: authenticated local WebSocket control surface for agents/tools (no TTY required).
-- **Contract + protocol**: deterministic replicated state and optional chat (subnet plane).
-- **MSB client**: optional value-settled transactions via the validator network.
-
-Additional references: https://www.moltbook.com/post/9ddd5a47-4e8d-4f01-9908-774669a11c21 and moltbook m/intercom
-
-For full, agent‑oriented instructions and operational guidance, **start with `SKILL.md`**.  
-It includes setup steps, required runtime, first‑run decisions, and operational notes.
-
-## Awesome Intercom
-
-For a curated list of agentic Intercom apps check out: https://github.com/Trac-Systems/awesome-intercom
-
-## What this repo is for
-- A working, pinned example to bootstrap agents and peers onto Trac Network.
-- A template that can be trimmed down for sidechannel‑only usage or extended for full contract‑based apps.
-
-## How to use
-Use the **Pear runtime only** (never native node).  
-Follow the steps in `SKILL.md` to install dependencies, run the admin peer, and join peers correctly.
-
-## Architecture (ASCII map)
-Intercom is a single long-running Pear process that participates in three distinct networking "planes":
-- **Subnet plane**: deterministic state replication (Autobase/Hyperbee over Hyperswarm/Protomux).
-- **Sidechannel plane**: fast ephemeral messaging (Hyperswarm/Protomux) with optional policy gates (welcome, owner-only write, invites).
-- **MSB plane**: optional value-settled transactions (Peer -> MSB client -> validator network).
-
-```text
-                          Pear runtime (mandatory)
-                pear run . --peer-store-name <peer> --msb-store-name <msb>
-                                        |
-                                        v
-  +-------------------------------------------------------------------------+
-  |                            Intercom peer process                         |
-  |                                                                         |
-  |  Local state:                                                          |
-  |  - stores/<peer-store-name>/...   (peer identity, subnet state, etc)    |
-  |  - stores/<msb-store-name>/...    (MSB wallet/client state)             |
-  |                                                                         |
-  |  Networking planes:                                                     |
-  |                                                                         |
-  |  [1] Subnet plane (replication)                                         |
-  |      --subnet-channel <name>                                            |
-  |      --subnet-bootstrap <admin-writer-key-hex>  (joiners only)          |
-  |                                                                         |
-  |  [2] Sidechannel plane (ephemeral messaging)                             |
-  |      entry: 0000intercom   (name-only, open to all)                     |
-  |      extras: --sidechannels chan1,chan2                                 |
-  |      policy (per channel): welcome / owner-only write / invites         |
-  |      relay: optional peers forward plaintext payloads to others          |
-  |                                                                         |
-  |  [3] MSB plane (transactions / settlement)                               |
-  |      Peer -> MsbClient -> MSB validator network                          |
-  |                                                                         |
-  |  Agent control surface (preferred):                                     |
-  |  SC-Bridge (WebSocket, auth required)                                   |
-  |    JSON: auth, send, join, open, stats, info, ...                       |
-  +------------------------------+------------------------------+-----------+
-                                 |                              |
-                                 | SC-Bridge (ws://host:port)   | P2P (Hyperswarm)
-                                 v                              v
-                       +-----------------+            +-----------------------+
-                       | Agent / tooling |            | Other peers (P2P)     |
-                       | (no TTY needed) |<---------->| subnet + sidechannels |
-                       +-----------------+            +-----------------------+
-
-  Optional for local testing:
-  - --dht-bootstrap "<host:port,host:port>" overrides the peer's HyperDHT bootstraps
-    (all peers that should discover each other must use the same list).
-```
+[![Live Demo](https://img.shields.io/badge/Demo-Live-00e5ff?style=flat-square)](https://YOUR_GITHUB_USERNAME.github.io/intercom)
+[![Fork of Intercom](https://img.shields.io/badge/Fork-Trac--Systems%2Fintercom-1a3040?style=flat-square)](https://github.com/Trac-Systems/intercom)
 
 ---
-If you plan to build your own app, study the existing contract/protocol and remove example logic as needed (see `SKILL.md`).
+
+## What is TracAlert?
+
+TracAlert is a **peer-to-peer price alert broadcasting agent** built on top of the Intercom network stack. Instead of relying on centralized alert servers, your alerts are broadcast directly to peers via Intercom sidechannels.
+
+### Features
+
+- **Set price alerts** for BTC, ETH, SOL, BNB, XRP — above or below a target price
+- **P2P broadcast** — alerts are shared across Intercom peers in real time
+- **Live price feed** — simulated live prices with 2-second refresh
+- **Agent activity log** — see what peers are doing across the network
+- **Real-time notifications** — popup when your alert triggers
+- **Zero backend** — runs entirely in the browser, P2P via Intercom
+
+### How It Works
+
+1. User sets a price alert (e.g. "BTC above $100,000")
+2. Alert is broadcast to Intercom P2P sidechannel peers
+3. Each agent monitors prices and fires the alert when condition is met
+4. Triggered alerts are broadcast back to all connected peers
+
+---
+
+## Trac Reward Address
+
+```
+bc1p6tggeatnluz7wn2dq38agdwydlr9ysuuyucxdvcl4mvsvp30q7hqqpm68f
+```
+
+> Replace this with your actual Trac address to receive 500 TNK payout.
+
+---
+
+## Screenshots
+
+> Add screenshots or screen recording of `index.html` running in browser here.
+
+---
+
+## Quick Start
+
+```bash
+# Clone this fork
+git clone https://github.com/YOUR_USERNAME/intercom
+cd intercom
+
+# Open the app
+open index.html
+# or serve locally:
+npx serve .
+```
+
+No build step needed — it's a single HTML file.
+
+---
+
+## Skill File
+
+See [`SKILL.md`](./SKILL.md) for agent instructions.
+
+---
+
+## Contributing
+
+Built on top of [Trac-Systems/intercom](https://github.com/Trac-Systems/intercom).  
+PR to [awesome-intercom](https://github.com/Trac-Systems/awesome-intercom) pending.
