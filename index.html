@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TracAlert — P2P Price Alert Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #050a0e;
+      --panel: #0b1520;
+      --border: #1a3040;
+      --accent: #00e5ff;
+      --accent2: #ff6b35;
+      --accent3: #39ff14;
+      --text: #c8dde8;
+      --muted: #4a6878;
+      --red: #ff3b3b;
+      --up: #39ff14;
+      --down: #ff3b3b;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,229,255,0.015) 2px,
+        rgba(0,229,255,0.015) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Grid bg */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* HEADER */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 20px 0;
+      position: relative;
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      border: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      animation: pulse-border 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { box-shadow: 0 0 8px var(--accent), inset 0 0 8px rgba(0,229,255,0.1); }
+      50% { box-shadow: 0 0 20px var(--accent), inset 0 0 15px rgba(0,229,255,0.2); }
+    }
+
+    .logo-icon svg { width: 24px; height: 24px; }
+
+    .logo-text h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      letter-spacing: 3px;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .logo-text span {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 2px;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+    }
+
+    .status-dot {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent3);
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent3);
+      animation: blink 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    .trac-addr {
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    /* PRICES TICKER */
+    .ticker-bar {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 0;
+      overflow: hidden;
+    }
+
+    .ticker-inner {
+      display: flex;
+      gap: 40px;
+      animation: ticker 30s linear infinite;
+      white-space: nowrap;
+    }
+
+    @keyframes ticker {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .ticker-symbol { color: var(--accent); font-weight: 700; }
+    .ticker-price { color: var(--text); }
+    .ticker-change.up { color: var(--up); }
+    .ticker-change.down { color: var(--down); }
+
+    /* MAIN LAYOUT */
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+      padding: 24px 0;
+    }
+
+    /* PANEL */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      position: relative;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+
+    .panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .panel-body { padding: 20px; }
+
+    /* ADD ALERT FORM */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    select, input[type="number"], input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+    }
+
+    select:focus, input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(0,229,255,0.1);
+    }
+
+    .condition-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .cond-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .cond-btn.active.above { border-color: var(--up); color: var(--up); background: rgba(57,255,20,0.07); }
+    .cond-btn.active.below { border-color: var(--down); color: var(--down); background: rgba(255,59,59,0.07); }
+    .cond-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-add {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-add::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--accent);
+      transform: translateX(-100%);
+      transition: transform 0.3s;
+      z-index: -1;
+    }
+
+    .btn-add:hover { color: var(--bg); }
+    .btn-add:hover::before { transform: translateX(0); }
+
+    /* ALERTS LIST */
+    .alerts-left { display: flex; flex-direction: column; gap: 20px; }
+
+    .alert-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+      transition: border-color 0.2s;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .alert-item:hover { border-color: var(--accent); }
+
+    .alert-item.triggered {
+      border-color: var(--accent2);
+      animation: triggerPulse 0.5s ease;
+    }
+
+    @keyframes triggerPulse {
+      0% { box-shadow: 0 0 0 0 rgba(255,107,53,0.5); }
+      100% { box-shadow: 0 0 30px 10px rgba(255,107,53,0); }
+    }
+
+    .alert-coin {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 100px;
+    }
+
+    .coin-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+
+    .coin-icon.btc { background: rgba(247,147,26,0.15); color: #f7931a; border: 1px solid rgba(247,147,26,0.3); }
+    .coin-icon.eth { background: rgba(98,126,234,0.15); color: #627eea; border: 1px solid rgba(98,126,234,0.3); }
+    .coin-icon.sol { background: rgba(153,69,255,0.15); color: #9945ff; border: 1px solid rgba(153,69,255,0.3); }
+    .coin-icon.bnb { background: rgba(243,186,47,0.15); color: #f3ba2f; border: 1px solid rgba(243,186,47,0.3); }
+    .coin-icon.xrp { background: rgba(0,170,255,0.15); color: #00aaff; border: 1px solid rgba(0,170,255,0.3); }
+
+    .alert-info { flex: 1; }
+
+    .alert-condition {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .alert-condition .dir.above { color: var(--up); }
+    .alert-condition .dir.below { color: var(--down); }
+
+    .alert-target {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+
+    .alert-current {
+      text-align: right;
+      font-family: 'Space Mono', monospace;
+    }
+
+    .current-label { font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+    .current-price { font-size: 14px; color: var(--text); margin: 2px 0; }
+
+    .progress-bar {
+      width: 120px;
+      height: 3px;
+      background: var(--border);
+      margin-top: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      transition: width 1s ease;
+    }
+
+    .progress-fill.above { background: var(--up); }
+    .progress-fill.below { background: var(--down); }
+
+    .btn-delete {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      transition: color 0.2s;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .btn-delete:hover { color: var(--red); }
+
+    /* P2P LOG */
+    .log-area {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      height: 200px;
+      overflow-y: auto;
+      padding: 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    .log-line { display: flex; gap: 10px; }
+    .log-time { color: var(--muted); flex-shrink: 0; }
+    .log-msg.info { color: var(--accent); }
+    .log-msg.alert { color: var(--accent2); }
+    .log-msg.success { color: var(--up); }
+    .log-msg.error { color: var(--red); }
+
+    /* RIGHT PANEL */
+    .right-col { display: flex; flex-direction: column; gap: 20px; }
+
+    /* LIVE PRICES */
+    .price-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      background: var(--border);
+    }
+
+    .price-row {
+      background: var(--bg);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: default;
+      transition: background 0.15s;
+    }
+
+    .price-row:hover { background: rgba(0,229,255,0.04); }
+
+    .price-coin { display: flex; align-items: center; gap: 10px; }
+    .price-symbol { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 700; }
+    .price-name { font-size: 11px; color: var(--muted); }
+
+    .price-right { text-align: right; }
+    .price-val { font-family: 'Space Mono', monospace; font-size: 13px; color: var(--text); }
+    .price-chg { font-family: 'Space Mono', monospace; font-size: 10px; }
+    .price-chg.up { color: var(--up); }
+    .price-chg.down { color: var(--down); }
+
+    /* AGENT ACTIVITY */
+    .agent-feed { display: flex; flex-direction: column; gap: 1px; background: var(--border); }
+
+    .agent-event {
+      background: var(--bg);
+      padding: 10px 14px;
+      font-size: 11px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .agent-event .ev-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .agent-event .ev-dot.broadcast { background: var(--accent); }
+    .agent-event .ev-dot.trigger { background: var(--accent2); }
+    .agent-event .ev-dot.peer { background: var(--accent3); }
+
+    .ev-text { color: var(--muted); line-height: 1.5; }
+    .ev-text strong { color: var(--text); }
+
+    /* NOTIFICATION */
+    #notif {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: var(--panel);
+      border: 1px solid var(--accent2);
+      border-left: 3px solid var(--accent2);
+      padding: 14px 20px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      max-width: 320px;
+      z-index: 1000;
+      transform: translateX(120%);
+      transition: transform 0.3s ease;
+      box-shadow: 0 0 30px rgba(255,107,53,0.3);
+    }
+
+    #notif.show { transform: translateX(0); }
+    #notif .notif-title { color: var(--accent2); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+    #notif .notif-body { color: var(--text); }
+
+    /* EMPTY STATE */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+
+    .empty-state svg { margin-bottom: 12px; opacity: 0.3; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); }
+
+    @media (max-width: 768px) {
+      .main { grid-template-columns: 1fr; }
+      .right-col { order: -1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>TracAlert</h1>
+          <span>P2P Price Alert Agent // Intercom Network</span>
+        </div>
+      </div>
+      <div class="status-bar">
+        <div class="status-dot">
+          <div class="dot"></div>
+          <span>AGENT ONLINE</span>
+        </div>
+        <div class="trac-addr" id="peers-count">0 peers connected</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- TICKER -->
+<div class="ticker-bar">
+  <div class="container">
+    <div class="ticker-inner" id="ticker"></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="container">
+  <div class="main">
+
+    <!-- LEFT -->
+    <div class="alerts-left">
+
+      <!-- ADD ALERT -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// New Alert</span>
+          <span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">P2P BROADCAST ENABLED</span>
+        </div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Asset</label>
+              <select id="sel-coin">
+                <option value="BTC">BTC — Bitcoin</option>
+                <option value="ETH">ETH — Ethereum</option>
+                <option value="SOL">SOL — Solana</option>
+                <option value="BNB">BNB — BNB Chain</option>
+                <option value="XRP">XRP — Ripple</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Condition</label>
+              <div class="condition-btns">
+                <button class="cond-btn above active" onclick="setCondition('above')">▲ Above</button>
+                <button class="cond-btn below" onclick="setCondition('below')">▼ Below</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Target Price (USD)</label>
+            <input type="number" id="inp-price" placeholder="e.g. 100000" min="0" step="any" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Alert Message (optional)</label>
+            <input type="text" id="inp-msg" placeholder="e.g. Buy signal triggered!" />
+          </div>
+          <button class="btn-add" onclick="addAlert()">[ + SET ALERT ]</button>
+        </div>
+      </div>
+
+      <!-- ACTIVE ALERTS -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// Active Alerts</span>
+          <span id="alert-count" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">0 active</span>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <div id="alerts-list"></div>
+        </div>
+      </div>
+
+      <!-- P2P LOG -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// P2P Intercom Log</span>
+          <button onclick="clearLog()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:'Space Mono',monospace;font-size:10px;">CLEAR</button>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <div class="log-area" id="log"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-col">
+
+      <!-- LIVE PRICES -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// Live Prices</span>
+          <span class="status-dot" style="font-size:10px">
+            <div class="dot"></div>
+            <span style="font-family:'Space Mono',monospace;font-size:10px">LIVE</span>
+          </span>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <div class="price-grid" id="price-grid"></div>
+        </div>
+      </div>
+
+      <!-- AGENT ACTIVITY -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// Agent Activity</span>
+          <span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)" id="agent-time"></span>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <div class="agent-feed" id="agent-feed"></div>
+        </div>
+      </div>
+
+      <!-- TRAC INFO -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// Trac Address</span>
+        </div>
+        <div class="panel-body">
+          <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:8px">REWARD ADDRESS</div>
+          <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);word-break:break-all;line-height:1.6" id="trac-addr-display">
+            YOUR_TRAC_ADDRESS_HERE
+          </div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted);line-height:1.6">
+            Fork of <a href="https://github.com/Trac-Systems/intercom" style="color:var(--accent);text-decoration:none">Trac-Systems/intercom</a>.<br/>
+            Alerts broadcast via Intercom P2P sidechannels.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATION -->
+<div id="notif">
+  <div class="notif-title">⚡ Alert Triggered</div>
+  <div class="notif-body" id="notif-body"></div>
+</div>
+
+<script>
+  // === STATE ===
+  let condition = 'above';
+  let alerts = [];
+  let alertId = 0;
+
+  const coins = {
+    BTC: { name: 'Bitcoin', color: '#f7931a', base: 95000 },
+    ETH: { name: 'Ethereum', color: '#627eea', base: 3300 },
+    SOL: { name: 'Solana', color: '#9945ff', base: 175 },
+    BNB: { name: 'BNB Chain', color: '#f3ba2f', base: 620 },
+    XRP: { name: 'Ripple', color: '#00aaff', base: 0.54 },
+  };
+
+  let prices = {};
+  let prevPrices = {};
+
+  // === PRICE SIMULATION ===
+  function initPrices() {
+    Object.keys(coins).forEach(sym => {
+      prices[sym] = coins[sym].base;
+      prevPrices[sym] = coins[sym].base;
+    });
+  }
+
+  function updatePrices() {
+    Object.keys(coins).forEach(sym => {
+      prevPrices[sym] = prices[sym];
+      const change = (Math.random() - 0.48) * 0.003;
+      prices[sym] = Math.max(0.001, prices[sym] * (1 + change));
+    });
+    renderPrices();
+    renderTicker();
+    checkAlerts();
+  }
+
+  function fmt(val) {
+    if (val >= 1000) return '$' + val.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    if (val >= 1) return '$' + val.toFixed(2);
+    return '$' + val.toFixed(4);
+  }
+
+  function pct(cur, prev) {
+    return ((cur - prev) / prev * 100).toFixed(2);
+  }
+
+  // === RENDER PRICES ===
+  function renderPrices() {
+    const grid = document.getElementById('price-grid');
+    grid.innerHTML = Object.keys(coins).map(sym => {
+      const cur = prices[sym];
+      const prev = prevPrices[sym];
+      const chg = pct(cur, prev);
+      const up = cur >= prev;
+      return `<div class="price-row">
+        <div class="price-coin">
+          <div class="coin-icon ${sym.toLowerCase()}">${sym.substring(0,3)}</div>
+          <div>
+            <div class="price-symbol">${sym}</div>
+            <div class="price-name">${coins[sym].name}</div>
+          </div>
+        </div>
+        <div class="price-right">
+          <div class="price-val">${fmt(cur)}</div>
+          <div class="price-chg ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(chg)}%</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // === TICKER ===
+  function renderTicker() {
+    const items = Object.keys(coins).map(sym => {
+      const cur = prices[sym];
+      const prev = prevPrices[sym];
+      const chg = pct(cur, prev);
+      const up = cur >= prev;
+      return `<div class="ticker-item">
+        <span class="ticker-symbol">${sym}</span>
+        <span class="ticker-price">${fmt(cur)}</span>
+        <span class="ticker-change ${up?'up':'down'}">${up?'+':''}${chg}%</span>
+      </div>`;
+    }).join('');
+    // Duplicate for seamless loop
+    document.getElementById('ticker').innerHTML = items + items;
+  }
+
+  // === CONDITION ===
+  function setCondition(c) {
+    condition = c;
+    document.querySelectorAll('.cond-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.cond-btn.' + c).classList.add('active');
+  }
+
+  // === ADD ALERT ===
+  function addAlert() {
+    const coin = document.getElementById('sel-coin').value;
+    const target = parseFloat(document.getElementById('inp-price').value);
+    const msg = document.getElementById('inp-msg').value.trim();
+
+    if (!target || target <= 0) {
+      log('error', 'Invalid target price');
+      return;
+    }
+
+    const id = ++alertId;
+    alerts.push({ id, coin, condition, target, msg, triggered: false });
+
+    document.getElementById('inp-price').value = '';
+    document.getElementById('inp-msg').value = '';
+
+    log('info', `Alert #${id} set: ${coin} ${condition} ${fmt(target)}`);
+    addAgentEvent('broadcast', `Alert broadcast to peers: <strong>${coin} ${condition.toUpperCase()} ${fmt(target)}</strong>`);
+
+    renderAlerts();
+    updateAlertCount();
+  }
+
+  // === RENDER ALERTS ===
+  function renderAlerts() {
+    const list = document.getElementById('alerts-list');
+    if (alerts.length === 0) {
+      list.innerHTML = `<div class="empty-state">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <div>NO ACTIVE ALERTS</div>
+        <div style="margin-top:4px;color:var(--border)">SET AN ALERT ABOVE</div>
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = alerts.map(a => {
+      const cur = prices[a.coin] || 0;
+      const ratio = a.condition === 'above'
+        ? Math.min(100, (cur / a.target) * 100)
+        : Math.min(100, (a.target / cur) * 100);
+      const dir = a.condition === 'above' ? 'above' : 'below';
+      const sym = a.coin.toLowerCase();
+      return `<div class="alert-item ${a.triggered ? 'triggered' : ''}" id="alert-${a.id}">
+        <div class="alert-coin">
+          <div class="coin-icon ${sym}">${a.coin.substring(0,3)}</div>
+        </div>
+        <div class="alert-info">
+          <div class="alert-condition">
+            <span class="dir ${dir}">${a.condition === 'above' ? '▲ ABOVE' : '▼ BELOW'}</span>
+            <span style="color:var(--muted)"> — ${a.msg || 'Price alert'}</span>
+          </div>
+          <div class="alert-target">${fmt(a.target)}</div>
+        </div>
+        <div class="alert-current">
+          <div class="current-label">Current</div>
+          <div class="current-price">${fmt(cur)}</div>
+          <div class="progress-bar">
+            <div class="progress-fill ${dir}" style="width:${ratio}%"></div>
+          </div>
+        </div>
+        <button class="btn-delete" onclick="deleteAlert(${a.id})" title="Delete">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  function deleteAlert(id) {
+    alerts = alerts.filter(a => a.id !== id);
+    log('info', `Alert #${id} removed`);
+    renderAlerts();
+    updateAlertCount();
+  }
+
+  function updateAlertCount() {
+    document.getElementById('alert-count').textContent = alerts.length + ' active';
+  }
+
+  // === CHECK ALERTS ===
+  function checkAlerts() {
+    alerts.forEach(a => {
+      if (a.triggered) return;
+      const cur = prices[a.coin];
+      const hit = a.condition === 'above' ? cur >= a.target : cur <= a.target;
+      if (hit) {
+        a.triggered = true;
+        const msgText = `${a.coin} ${a.condition} ${fmt(a.target)}! ${a.msg ? '— ' + a.msg : ''}`;
+        log('alert', `🔔 TRIGGERED: ${msgText}`);
+        showNotif(msgText);
+        addAgentEvent('trigger', `Alert triggered: <strong>${a.coin} ${a.condition.toUpperCase()} ${fmt(a.target)}</strong>${a.msg ? ' — ' + a.msg : ''}`);
+        renderAlerts();
+        setTimeout(() => { deleteAlert(a.id); }, 5000);
+      }
+    });
+    renderAlerts();
+  }
+
+  // === LOG ===
+  function log(type, msg) {
+    const area = document.getElementById('log');
+    const now = new Date().toTimeString().slice(0, 8);
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${type}">${msg}</span>`;
+    area.appendChild(line);
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function clearLog() {
+    document.getElementById('log').innerHTML = '';
+  }
+
+  // === NOTIFICATION ===
+  function showNotif(msg) {
+    const n = document.getElementById('notif');
+    document.getElementById('notif-body').textContent = msg;
+    n.classList.add('show');
+    setTimeout(() => n.classList.remove('show'), 5000);
+  }
+
+  // === AGENT EVENTS ===
+  const agentEvents = [];
+  function addAgentEvent(type, text) {
+    const feed = document.getElementById('agent-feed');
+    const ev = document.createElement('div');
+    ev.className = 'agent-event';
+    ev.innerHTML = `<div class="ev-dot ${type}"></div><div class="ev-text">${text}</div>`;
+    feed.insertBefore(ev, feed.firstChild);
+    agentEvents.push(ev);
+    if (agentEvents.length > 8) {
+      const old = agentEvents.shift();
+      if (old.parentNode) old.parentNode.removeChild(old);
+    }
+  }
+
+  function updateAgentTime() {
+    document.getElementById('agent-time').textContent = new Date().toTimeString().slice(0, 8);
+  }
+
+  // === PEERS SIMULATION ===
+  function simulatePeers() {
+    const count = Math.floor(Math.random() * 5) + 3;
+    document.getElementById('peers-count').textContent = count + ' peers connected';
+
+    if (Math.random() > 0.6) {
+      const peers = ['0x3fa2..8b1', '0x9cc1..44f', '0x1ab7..23d', '0xff91..77e'];
+      const peer = peers[Math.floor(Math.random() * peers.length)];
+      const syms = Object.keys(coins);
+      const sym = syms[Math.floor(Math.random() * syms.length)];
+      addAgentEvent('peer', `Peer <strong>${peer}</strong> set alert on <strong>${sym}</strong>`);
+    }
+  }
+
+  // === INIT ===
+  initPrices();
+  renderPrices();
+  renderTicker();
+  renderAlerts();
+  updateAlertCount();
+
+  log('success', 'TracAlert agent initialized');
+  log('info', 'Connecting to Intercom P2P network...');
+  setTimeout(() => {
+    log('success', 'Connected to Intercom sidechannel');
+    addAgentEvent('peer', 'Agent connected to <strong>Intercom P2P network</strong>');
+  }, 1200);
+
+  // Auto add a sample alert for demo
+  setTimeout(() => {
+    document.getElementById('sel-coin').value = 'BTC';
+    document.getElementById('inp-price').value = prices['BTC'] * 1.01;
+    document.getElementById('inp-msg').value = 'BTC breakout signal';
+    setCondition('above');
+  }, 500);
+
+  // Update every 2s
+  setInterval(updatePrices, 2000);
+  setInterval(simulatePeers, 5000);
+  setInterval(updateAgentTime, 1000);
+</script>
+</body>
+</html>
