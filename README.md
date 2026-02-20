@@ -32,7 +32,7 @@ TracAlert is a **peer-to-peer price alert broadcasting agent** built on top of t
 ## Trac Reward Address
 
 ```
-bc1p6tggeatnluz7wn2dq38agdwydlr9ysuuyucxdvcl4mvsvp30q7hqqpm68f
+trac15ks5z8a9sfp6x44f0hycttpwdz73dqhrmvkaankhws4s3330pnesatkyj7
 ```
 
 > Replace this with your actual Trac address to receive 500 TNK payout.
